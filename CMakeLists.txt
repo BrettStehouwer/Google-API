@@ -259,7 +259,6 @@ INSTALL (FILES
     COMPONENT msgpack-cxx
 )
 
-# This installs package in install tree for using installed targets.
 INSTALL (
     EXPORT msgpack-cxx-targets
     FILE msgpack-cxx-targets.cmake
@@ -267,18 +266,16 @@ INSTALL (
     COMPONENT msgpack-cxx
 )
 
-# Generate the pkgconfig file:
-SET(PKG_CONFIG_LIBS
-    "-L\${libdir}"
-)
-SET(PKG_CONFIG_CFLAGS
-    "-I\${includedir}"
-)
-
+# Generate pkg-config file for msgpack-c
+# This allows installations to be detected via pkg-config
 CONFIGURE_FILE(
   "${CMAKE_CURRENT_SOURCE_DIR}/cmake/pkg-config.pc.in"
   "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc"
+  @ONLY
 )
 
-INSTALL(FILES "${CMAKE_BINARY_DIR}/${PROJECT_NAME}.pc"
-        DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig)
+INSTALL(
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/${PROJECT_NAME}.pc"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+  COMPONENT msgpack-cxx
+)
