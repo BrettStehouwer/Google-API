@@ -7,6 +7,8 @@
 
 namespace castor {
 
+class Tokenizer; // Forward declaration
+
 /**
  * @brief Main inference engine for LLM models using TensorRT
  * 
@@ -49,9 +51,20 @@ public:
      */
     bool is_initialized() const { return initialized_; }
 
+    /**
+     * @brief Get associated tokenizer
+     */
+    std::shared_ptr<Tokenizer> get_tokenizer() const { return tokenizer_; }
+
+    /**
+     * @brief Set associated tokenizer
+     */
+    void set_tokenizer(std::shared_ptr<Tokenizer> tokenizer) { tokenizer_ = tokenizer; }
+
 private:
     ModelConfig config_;
     bool initialized_ = false;
+    std::shared_ptr<Tokenizer> tokenizer_;
     
     // TensorRT runtime and engine will be held here
     // Placeholder for actual TensorRT integration

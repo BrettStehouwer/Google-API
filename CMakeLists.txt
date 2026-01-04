@@ -65,12 +65,15 @@ set(SOURCES
     src/main.cpp
     src/engine.cpp
     src/tokenizer.cpp
+    src/server.cpp
 )
 
 set(HEADERS
     include/engine.hpp
     include/tokenizer.hpp
     include/model_config.hpp
+    include/server.hpp
+    tests/test_runner.hpp
 )
 
 # Create executable
