@@ -1,0 +1,6 @@
+[submodule "third_party/crow"]
+	path = third_party/crow
+	url = https://github.com/CrowCpp/Crow.git
+[submodule "third_party/tokenizers-cpp"]
+	path = third_party/tokenizers-cpp
+	url = https://github.com/mlc-ai/tokenizers-cpp.git

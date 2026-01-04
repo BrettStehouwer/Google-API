@@ -1,0 +1,36 @@
+# --- Castor-RT: Hardware Specific Artifacts ---
+# Never commit the Engine. It is specific to your exact GPU (SM89).
+*.engine
+*.trt
+*.plan
+
+# --- Visual Studio & MSVC ---
+.vs/
+out/
+*.sln
+*.vcxproj
+*.vcxproj.user
+*.vcxproj.filters
+*.aps
+*.opendb
+*.iobj
+*.ipdb
+*.pdb
+*.tlog
+
+# --- CMake Build Artifacts ---
+build/
+cmake-build-*/
+CMakeSettings.json
+CMakeUserPresets.json
+CMakeCache.txt
+CMakeFiles/
+*.cmake
+!cmake_modules/*.cmake
+
+# --- Dependencies & Binaries ---
+*.exe
+*.dll
+*.lib
+third_party/crow/  # We will use git submodules instead
+third_party/tokenizers-cpp/ 
