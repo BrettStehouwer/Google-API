@@ -67,7 +67,7 @@ message(STATUS "OpenSSL: FOUND (${OPENSSL_VERSION})")
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/crow/include
-    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tokenizers-cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tokenizers-cpp/include
     ${Boost_INCLUDE_DIRS}
     ${OPENSSL_INCLUDE_DIR}
 )
