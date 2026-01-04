@@ -1,0 +1,122 @@
+name: Build & Test (C++20/CUDA)
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  build:
+    name: Build on ${{ matrix.os }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-22.04, ubuntu-24.04]
+        cxx-compiler: [g++-11, g++-13]
+
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies (Ubuntu)
+      if: runner.os == 'Linux'
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y \
+          build-essential \
+          cmake \
+          ninja-build \
+          pkg-config \
+          ${{ matrix.cxx-compiler }}
+
+    - name: Set up GCC/G++
+      run: |
+        echo "CC=${{ matrix.cxx-compiler }}" >> $GITHUB_ENV
+        echo "CXX=$(echo ${{ matrix.cxx-compiler }} | sed 's/gcc/g++')" >> $GITHUB_ENV
+
+    - name: Verify GCC version
+      run: |
+        $CXX --version
+        $CC --version
+
+    - name: Create build directory
+      run: mkdir -p build
+
+    - name: Configure CMake
+      working-directory: build
+      run: |
+        cmake -DCMAKE_BUILD_TYPE=Release \
+               -DCMAKE_C_COMPILER=${{ env.CC }} \
+               -DCMAKE_CXX_COMPILER=${{ env.CXX }} \
+               ..
+
+    - name: Build
+      working-directory: build
+      run: cmake --build . --config Release --parallel $(nproc)
+
+    - name: Run unit tests
+      working-directory: build
+      run: ctest --output-on-failure -C Release
+
+    - name: Run main executable
+      working-directory: build
+      run: ./bin/castor-rt
+
+  lint:
+    name: Code Quality (Clang-Tidy)
+    runs-on: ubuntu-24.04
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install clang-tidy
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y clang-tidy cmake build-essential
+
+    - name: Create build directory
+      run: mkdir -p build
+
+    - name: Configure CMake with clang-tidy
+      working-directory: build
+      run: |
+        cmake -DCMAKE_BUILD_TYPE=Release \
+               -DCMAKE_CXX_CLANG_TIDY="clang-tidy;--checks=-*,readability-*,performance-*" \
+               ..
+
+    - name: Build with clang-tidy
+      working-directory: build
+      run: cmake --build . --config Release --parallel $(nproc) || true
+
+  memory-check:
+    name: Memory Safety (Valgrind)
+    runs-on: ubuntu-24.04
+    
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential valgrind
+
+    - name: Create build directory
+      run: mkdir -p build
+
+    - name: Configure CMake
+      working-directory: build
+      run: cmake -DCMAKE_BUILD_TYPE=Debug ..
+
+    - name: Build
+      working-directory: build
+      run: cmake --build . --config Debug
+
+    - name: Run with Valgrind
+      working-directory: build
+      run: valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./bin/castor-rt || true

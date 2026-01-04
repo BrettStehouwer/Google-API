@@ -45,6 +45,16 @@ else()
     message(WARNING "TensorRT not found. Building without GPU inference")
 endif()
 
+# Find Catch2 for testing
+find_package(Catch2 3 QUIET)
+if(NOT Catch2_FOUND)
+    message(STATUS "Catch2 not found - using local minimal implementation")
+    add_library(Catch2 INTERFACE)
+    target_include_directories(Catch2 INTERFACE "${CMAKE_CURRENT_SOURCE_DIR}/third_party/catch2")
+else()
+    message(STATUS "Catch2: FOUND")
+endif()
+
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -66,6 +76,7 @@ set(SOURCES
     src/engine.cpp
     src/tokenizer.cpp
     src/server.cpp
+    src/tensorrt_engine.cpp
 )
 
 set(HEADERS
@@ -73,6 +84,7 @@ set(HEADERS
     include/tokenizer.hpp
     include/model_config.hpp
     include/server.hpp
+    include/tensorrt_engine.hpp
     tests/test_runner.hpp
 )
 
@@ -113,6 +125,50 @@ set_target_properties(castor-rt PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
 )
 
+# ============ Testing Setup ============
+enable_testing()
+
+# Test executable
+set(TEST_SOURCES
+    tests/test_main.cpp
+    src/engine.cpp
+    src/tokenizer.cpp
+    src/server.cpp
+    src/tensorrt_engine.cpp
+)
+
+add_executable(castor-tests ${TEST_SOURCES})
+
+target_link_libraries(castor-tests
+    PRIVATE
+    Catch2
+)
+
+if(HAVE_CUDA AND CUDAToolkit_FOUND)
+    target_link_libraries(castor-tests
+        PRIVATE
+        CUDA::cudart
+        CUDA::cublas
+        CUDA::curand
+    )
+endif()
+
+if(TensorRT_FOUND)
+    target_link_libraries(castor-tests
+        PRIVATE
+        nvinfer
+        nvinfer_plugin
+    )
+endif()
+
+target_compile_options(castor-tests PRIVATE -Wall -Wextra)
+set_target_properties(castor-tests PROPERTIES
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+)
+
+# Add tests to CTest
+add_test(NAME CastorTests COMMAND castor-tests)
+
 # Print configuration summary
 message(STATUS "========== Castor-RT Configuration ==========")
 message(STATUS "Project: ${PROJECT_NAME}")
@@ -128,5 +184,21 @@ if(TensorRT_FOUND)
 else()
     message(STATUS "TensorRT: DISABLED")
 endif()
+message(STATUS "Testing: ENABLED (Catch2)")
+message(STATUS "Source files: ${SOURCES}")
+message(STATUS "============================================")
+message(STATUS "Build Type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "C++ Standard: ${CMAKE_CXX_STANDARD}")
+if(HAVE_CUDA)
+    message(STATUS "CUDA Support: ENABLED (sm_${CUDA_ARCH})")
+else()
+    message(STATUS "CUDA Support: DISABLED")
+endif()
+if(TensorRT_FOUND)
+    message(STATUS "TensorRT: ENABLED")
+else()
+    message(STATUS "TensorRT: DISABLED")
+endif()
+message(STATUS "Testing: ENABLED (Catch2)")
 message(STATUS "Source files: ${SOURCES}")
 message(STATUS "============================================")
