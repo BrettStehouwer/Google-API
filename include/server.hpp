@@ -9,6 +9,11 @@ namespace castor {
 
 /**
  * @brief REST API server for LLM inference using Crow framework
+ * 
+ * Provides HTTP endpoints for:
+ * - GET  /health - Server health status
+ * - GET  /model  - Model configuration and info
+ * - POST /infer  - Run inference on input text
  */
 class Server {
 public:
@@ -22,6 +27,9 @@ public:
 
     /**
      * @brief Start the HTTP server (blocking)
+     * 
+     * Starts Crow app and listens for incoming requests.
+     * This call blocks until shutdown() is called.
      */
     void run();
 

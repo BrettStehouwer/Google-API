@@ -1,0 +1,20 @@
+# Corrected CMakeLists.txt snippet for msgpack-c pkg-config file
+
+# At the end of CMakeLists.txt, after all INSTALL() directives:
+
+# Generate pkg-config file for msgpack-c
+# This allows installations to be detected via pkg-config
+CONFIGURE_FILE(
+  "${CMAKE_CURRENT_SOURCE_DIR}/cmake/pkg-config.pc.in"
+  "${CMAKE_CURRENT_BINARY_DIR}/msgpack.pc"
+  @ONLY
+)
+
+INSTALL(
+  FILES "${CMAKE_CURRENT_BINARY_DIR}/msgpack.pc"
+  DESTINATION "${CMAKE_INSTALL_LIBDIR}/pkgconfig"
+  COMPONENT msgpack-cxx
+)
+
+# Usage: pkg-config --cflags --libs msgpack
+# This will output: -I/usr/local/include (or wherever it's installed)

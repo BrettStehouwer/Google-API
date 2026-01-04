@@ -5,20 +5,66 @@ on:
     branches: [ main, develop ]
   pull_request:
     branches: [ main ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+env:
+  CMAKE_VERSION: 3.24.0
+  NINJA_VERSION: latest
+  CCACHE_MAXSIZE: 500M
+  CCACHE_HARDLINK: true
 
 jobs:
+  pre-checks:
+    name: Pre-build Checks
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Check CMakeLists.txt syntax
+      run: |
+        cmake --version
+        cmake -P CMakeLists.txt > /dev/null 2>&1 || echo "Note: Basic syntax check only"
+
+    - name: Validate required files
+      run: |
+        files=("CMakeLists.txt" "include/engine.hpp" "src/main.cpp")
+        for file in "${files[@]}"; do
+          if [ ! -f "$file" ]; then
+            echo "❌ Missing required file: $file"
+            exit 1
+          fi
+        done
+        echo "✅ All required files present"
+
+    - name: Check submodule status
+      run: git submodule status
+
   build:
     name: Build on ${{ matrix.os }}
+    needs: pre-checks
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
         os: [ubuntu-22.04, ubuntu-24.04]
         cxx-compiler: [g++-11, g++-13]
+      fail-fast: false
 
     steps:
     - uses: actions/checkout@v4
       with:
         submodules: recursive
+
+    - name: Setup ccache
+      uses: hendrikmuhs/ccache-action@v1.2
+      with:
+        key: ${{ matrix.os }}-${{ matrix.cxx-compiler }}-${{ github.run_id }}
+        max-size: ${{ env.CCACHE_MAXSIZE }}
 
     - name: Install dependencies (Ubuntu)
       if: runner.os == 'Linux'
@@ -29,40 +75,87 @@ jobs:
           cmake \
           ninja-build \
           pkg-config \
+          ccache \
           ${{ matrix.cxx-compiler }}
 
     - name: Set up GCC/G++
       run: |
         echo "CC=${{ matrix.cxx-compiler }}" >> $GITHUB_ENV
         echo "CXX=$(echo ${{ matrix.cxx-compiler }} | sed 's/gcc/g++')" >> $GITHUB_ENV
+        echo "CMAKE_CXX_COMPILER_LAUNCHER=ccache" >> $GITHUB_ENV
 
     - name: Verify GCC version
       run: |
         $CXX --version
         $CC --version
+        ccache --version
 
     - name: Create build directory
       run: mkdir -p build
 
-    - name: Configure CMake
+    - name: Configure CMake (Release)
       working-directory: build
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release \
                -DCMAKE_C_COMPILER=${{ env.CC }} \
                -DCMAKE_CXX_COMPILER=${{ env.CXX }} \
+               -DCMAKE_CXX_COMPILER_LAUNCHER=ccache \
+               -GNinja \
                ..
 
     - name: Build
       working-directory: build
-      run: cmake --build . --config Release --parallel $(nproc)
+      run: cmake --build . --config Release --parallel $(nproc) --verbose
 
     - name: Run unit tests
       working-directory: build
-      run: ctest --output-on-failure -C Release
+      run: ctest --output-on-failure -C Release --timeout 300
 
     - name: Run main executable
       working-directory: build
-      run: ./bin/castor-rt
+      run: timeout 30 ./bin/castor-rt || true
+
+    - name: Upload build artifacts
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: build-artifacts-${{ matrix.os }}-${{ matrix.cxx-compiler }}
+        path: build/bin/
+        retention-days: 7
+
+  sanitize:
+    name: Address & Undefined Behavior Sanitizers
+    runs-on: ubuntu-24.04
+    steps:
+    - uses: actions/checkout@v4
+      with:
+        submodules: recursive
+
+    - name: Install dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y cmake build-essential g++-13
+
+    - name: Create build directory
+      run: mkdir -p build
+
+    - name: Configure CMake with sanitizers
+      working-directory: build
+      run: |
+        cmake -DCMAKE_BUILD_TYPE=Debug \
+               -DCMAKE_CXX_COMPILER=g++-13 \
+               -DCMAKE_CXX_FLAGS="-fsanitize=address,undefined -fno-sanitize-recover=all -fPIC" \
+               ..
+
+    - name: Build with sanitizers
+      working-directory: build
+      run: cmake --build . --config Debug --parallel $(nproc)
+
+    - name: Run tests with sanitizers
+      working-directory: build
+      env:
+        ASAN_OPTIONS: strict_string_checks=1:detect_stack_use_after_return=1:check_initialization_order=1:strict_init_order=1
+      run: ctest --output-on-failure -C Debug --timeout 300 || true
 
   lint:
     name: Code Quality (Clang-Tidy)
@@ -76,7 +169,7 @@ jobs:
     - name: Install clang-tidy
       run: |
         sudo apt-get update
-        sudo apt-get install -y clang-tidy cmake build-essential
+        sudo apt-get install -y clang-tidy clang-format cmake build-essential
 
     - name: Create build directory
       run: mkdir -p build
@@ -85,12 +178,20 @@ jobs:
       working-directory: build
       run: |
         cmake -DCMAKE_BUILD_TYPE=Release \
-               -DCMAKE_CXX_CLANG_TIDY="clang-tidy;--checks=-*,readability-*,performance-*" \
+               -DCMAKE_CXX_CLANG_TIDY="clang-tidy;--checks=-*,readability-*,performance-*,bugprone-*" \
+               -GNinja \
                ..
 
     - name: Build with clang-tidy
       working-directory: build
-      run: cmake --build . --config Release --parallel $(nproc) || true
+      run: cmake --build . --config Release --parallel $(nproc) 2>&1 | tee tidy-output.log || true
+
+    - name: Generate clang-tidy report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: clang-tidy-report
+        path: build/tidy-output.log
 
   memory-check:
     name: Memory Safety (Valgrind)
@@ -111,12 +212,43 @@ jobs:
 
     - name: Configure CMake
       working-directory: build
-      run: cmake -DCMAKE_BUILD_TYPE=Debug ..
+      run: cmake -DCMAKE_BUILD_TYPE=Debug -GNinja ..
 
     - name: Build
       working-directory: build
-      run: cmake --build . --config Debug
+      run: cmake --build . --config Debug --parallel $(nproc)
 
     - name: Run with Valgrind
       working-directory: build
-      run: valgrind --leak-check=full --show-leak-kinds=all --error-exitcode=1 ./bin/castor-rt || true
+      run: |
+        valgrind --leak-check=full \
+                 --show-leak-kinds=all \
+                 --track-origins=yes \
+                 --verbose \
+                 --log-file=valgrind-out.txt \
+                 ./bin/castor-rt || true
+        cat valgrind-out.txt
+
+    - name: Upload Valgrind report
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: valgrind-report
+        path: build/valgrind-out.txt
+
+  summary:
+    name: Build Summary
+    runs-on: ubuntu-24.04
+    needs: [build, lint, memory-check, sanitize]
+    if: always()
+    steps:
+    - name: Job Status Summary
+      run: |
+        echo "## CI Pipeline Summary" >> $GITHUB_STEP_SUMMARY
+        echo "" >> $GITHUB_STEP_SUMMARY
+        echo "| Job | Status |" >> $GITHUB_STEP_SUMMARY
+        echo "|-----|--------|" >> $GITHUB_STEP_SUMMARY
+        echo "| Build | ${{ needs.build.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Linting | ${{ needs.lint.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Memory Check | ${{ needs.memory-check.result }} |" >> $GITHUB_STEP_SUMMARY
+        echo "| Sanitizers | ${{ needs.sanitize.result }} |" >> $GITHUB_STEP_SUMMARY

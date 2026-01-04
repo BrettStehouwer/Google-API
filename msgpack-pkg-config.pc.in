@@ -1,0 +1,12 @@
+Name: msgpack
+Description: MessagePack C/C++ serialization library - efficient binary serialization format
+Version: 3.3.0
+prefix=@CMAKE_INSTALL_PREFIX@
+includedir=${prefix}/include
+
+# msgpack-c is a header-only C++ library
+# No external libraries required for basic usage
+# Boost is optional for enhanced adaptors (std::optional, std::string_view, etc.)
+Cflags: -I${includedir}
+Libs:
+Requires:

@@ -55,11 +55,21 @@ else()
     message(STATUS "Catch2: FOUND")
 endif()
 
+# Find Boost (required for Crow)
+find_package(Boost REQUIRED COMPONENTS system)
+message(STATUS "Boost: FOUND (${Boost_VERSION})")
+
+# Find OpenSSL for HTTPS support
+find_package(OpenSSL REQUIRED)
+message(STATUS "OpenSSL: FOUND (${OPENSSL_VERSION})")
+
 # Include directories
 include_directories(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/crow/include
     ${CMAKE_CURRENT_SOURCE_DIR}/third_party/tokenizers-cpp
+    ${Boost_INCLUDE_DIRS}
+    ${OPENSSL_INCLUDE_DIR}
 )
 
 if(HAVE_CUDA AND CUDAToolkit_FOUND)
@@ -94,6 +104,10 @@ add_executable(castor-rt ${SOURCES} ${HEADERS})
 # Link libraries
 target_link_libraries(castor-rt
     PRIVATE
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    pthread
 )
 
 if(HAVE_CUDA AND CUDAToolkit_FOUND)
@@ -142,6 +156,10 @@ add_executable(castor-tests ${TEST_SOURCES})
 target_link_libraries(castor-tests
     PRIVATE
     Catch2
+    Boost::system
+    OpenSSL::SSL
+    OpenSSL::Crypto
+    pthread
 )
 
 if(HAVE_CUDA AND CUDAToolkit_FOUND)

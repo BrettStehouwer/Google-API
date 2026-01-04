@@ -10,8 +10,6 @@ Built with:
 - **tokenizers-cpp** for fast text processing
 
 ## Features
-
-✅ RTX 4090 optimized (SM 89)  
 ✅ FP32, FP16, INT8 quantization support  
 ✅ Multi-batch inference  
 ✅ CUDA-optimized kernels  

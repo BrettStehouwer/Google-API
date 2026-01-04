@@ -83,24 +83,22 @@ int main(int argc, char* argv[]) {
         std::cout << "  GET  http://localhost:8080/model\n";
         std::cout << "  POST http://localhost:8080/infer (body: {\"prompt\": \"...\"})\n";
         
-        // Uncomment to start server (blocks):
-        // server->run();
-        
-        std::cout << "\n[INFO] Server ready (not started - uncomment server->run() in main)\n";
+        // Start server (blocks main thread until shutdown)
+        server->run();
+        // Code after this point will only execute after server shutdown
     }
 
-    // Example inference (without server)
-    std::cout << "\n[Inference] Example test...\n";
-    std::vector<int32_t> input_ids = tokenizer->encode("Hello, world!");
-    std::vector<float> output_logits;
-
-    if (engine->infer(input_ids, output_logits)) {
-        std::cout << "[Inference] Success!\n";
-        std::cout << "  Input tokens: " << input_ids.size() << "\n";
-        std::cout << "  Output logits: " << output_logits.size() << "\n";
-    } else {
-        std::cout << "[Inference] Failed (expected - TensorRT not integrated yet)\n";
-    }
+    // Example inference (without server) can be placed here if needed after server shutdown
+    // std::cout << "\n[Inference] Example test...\n";
+    // std::vector<int32_t> input_ids = tokenizer->encode("Hello, world!");
+    // std::vector<float> output_logits;
+    // if (engine->infer(input_ids, output_logits)) {
+    //     std::cout << "[Inference] Success!\n";
+    //     std::cout << "  Input tokens: " << input_ids.size() << "\n";
+    //     std::cout << "  Output logits: " << output_logits.size() << "\n";
+    // } else {
+    //     std::cout << "[Inference] Failed (expected - TensorRT not integrated yet)\n";
+    // }
 
     std::cout << "\n========================================\n";
     std::cout << "Castor-RT: Ready for inference\n";
